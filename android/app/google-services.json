@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "181561240398",
+    "project_id": "dooko-9baf4",
+    "storage_bucket": "dooko-9baf4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:181561240398:android:d5131293a788ff20094c1f",
+        "android_client_info": {
+          "package_name": "com.example.untitled1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDYXEbgFGa8I1Jx4i01Wz9Np5D6M1HhrJo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
