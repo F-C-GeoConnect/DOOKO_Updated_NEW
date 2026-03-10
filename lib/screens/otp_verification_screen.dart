@@ -4,21 +4,22 @@ import 'main_screen/main_page.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String email;
-  final String password; 
+  final String password; // Receive password for auto-login
 
   const OTPVerificationScreen({
-    super.key,
+    Key? key,
     required this.email,
     required this.password,
-  });
+  }) : super(key: key);
 
   @override
   State<OTPVerificationScreen> createState() => _OTPVerificationScreenState();
 }
 
 class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
-  final List<TextEditingController> _otpControllers = List.generate(6, (index) => TextEditingController());
-  final List<FocusNode> _otpFocusNodes = List.generate(6, (index) => FocusNode());
+  // Updated to handle 8 digits
+  final List<TextEditingController> _otpControllers = List.generate(8, (index) => TextEditingController());
+  final List<FocusNode> _otpFocusNodes = List.generate(8, (index) => FocusNode());
   bool _isVerifying = false;
 
   @override
@@ -36,9 +37,10 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     if (_isVerifying) return;
 
     final otp = _otpControllers.map((c) => c.text).join();
-    if (otp.length != 6) {
+    // Updated to check for 8 digits
+    if (otp.length != 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter the complete 6-digit code.'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Please enter the complete 8-digit code.'), backgroundColor: Colors.red),
       );
       return;
     }
@@ -64,11 +66,11 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const MainPage()),
-            (Route<dynamic> route) => false,
+                (Route<dynamic> route) => false,
           );
         }
       } else {
-          throw const AuthException('Invalid OTP or session could not be created.');
+        throw const AuthException('Invalid OTP or session could not be created.');
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -122,7 +124,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,7 +140,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Enter the 6-digit verification code sent to\n${widget.email}',
+                'Enter the verification code sent to\n${widget.email}',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[600],
@@ -146,11 +148,12 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 ),
               ),
               const SizedBox(height: 40),
+              // --- 8-Digit OTP Input Fields ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(6, (index) {
+                children: List.generate(8, (index) {
                   return SizedBox(
-                    width: 45, 
+                    width: 35, // Adjusted width to fit 8 boxes
                     child: TextFormField(
                       controller: _otpControllers[index],
                       focusNode: _otpFocusNodes[index],
@@ -174,14 +177,14 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                         ),
                       ),
                       onChanged: (value) {
-                        if (value.length == 1 && index < 5) {
+                        if (value.length == 1 && index < 7) {
                           _otpFocusNodes[index + 1].requestFocus();
                         } else if (value.isEmpty && index > 0) {
                           _otpFocusNodes[index - 1].requestFocus();
                         }
 
-                        if (index == 5 && value.isNotEmpty) {
-                           _otpFocusNodes[index].unfocus(); 
+                        if (index == 7 && value.isNotEmpty) {
+                          _otpFocusNodes[index].unfocus(); // Unfocus after the last digit
                           _verifyOTP();
                         }
                       },
@@ -220,15 +223,15 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     elevation: 0,
                   ),
                   child: _isVerifying
-                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const CircularProgressIndicator(color: Colors.white)
                       : const Text(
-                          'Verify',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
+                    'Verify',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
             ],

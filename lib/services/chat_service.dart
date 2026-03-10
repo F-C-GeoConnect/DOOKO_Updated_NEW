@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/conversation_summary.dart';
 
-/// All Supabase data access for the chat feature lives here.
 class ChatService {
   ChatService._();
   static final ChatService instance = ChatService._();
@@ -12,22 +11,18 @@ class ChatService {
 
   String? get currentUserId => _supabase.auth.currentUser?.id;
 
-  // ── Conversation helpers ──────────────────────────────────────────────────
-
   static String buildConversationId(String userA, String userB) {
     final ids = [userA, userB]..sort();
     return ids.join('_');
   }
 
-  // ── Conversation list ─────────────────────────────────────────────────────
-
   Future<List<ConversationSummary>> fetchConversations(String uid) async {
+    // FIXED: Only select necessary columns to reduce egress
     final data = await _supabase
         .from('messages')
-        .select(
-        'conversation_id, sender_id, receiver_id, content, image_url, is_read, created_at')
+        .select('conversation_id, sender_id, receiver_id, content, image_url, is_read, created_at')
         .or('sender_id.eq.$uid,receiver_id.eq.$uid')
-        .order('created_at', ascending: false, nullsFirst: false)
+        .order('created_at', ascending: false)
         .order('id', ascending: false);
 
     final messages = List<Map<String, dynamic>>.from(data);
@@ -99,17 +94,15 @@ class ChatService {
     return summaries;
   }
 
-  // ── Messages ──────────────────────────────────────────────────────────────
-
-  Future<List<Map<String, dynamic>>> fetchMessages(
-      String conversationId) async {
+  Future<List<Map<String, dynamic>>> fetchMessages(String conversationId) async {
+    // FIXED: Specify columns for message history
     final data = await _supabase
         .from('messages')
-        .select()
+        .select('id, conversation_id, sender_id, receiver_id, content, image_url, is_read, created_at')
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: false)
         .order('id', ascending: false)
-        .limit(200);
+        .limit(100); // Reduced from 200 to 100 for better initial load egress
     
     final list = List<Map<String, dynamic>>.from(data);
     return list.reversed.toList();
@@ -129,7 +122,7 @@ class ChatService {
       'receiver_id': receiverId,
       'content': content,
     })
-        .select()
+        .select('id, conversation_id, sender_id, receiver_id, content, image_url, is_read, created_at')
         .single();
     return inserted;
   }
@@ -143,11 +136,9 @@ class ChatService {
     final fileName = '${DateTime.now().millisecondsSinceEpoch}_$senderId.jpg';
     final filePath = '$senderId/$fileName';
 
-    // 1. Upload to bucket
     await _supabase.storage.from('chat_images').upload(filePath, file);
-    
-    // 2. ONLY store the path, not the public URL
-    final imageUrl = filePath;
+    final imageUrl =
+    _supabase.storage.from('chat_images').getPublicUrl(filePath);
 
     final inserted = await _supabase
         .from('messages')
@@ -158,12 +149,10 @@ class ChatService {
       'content': null,
       'image_url': imageUrl,
     })
-        .select()
+        .select('id, conversation_id, sender_id, receiver_id, content, image_url, is_read, created_at')
         .single();
     return inserted;
   }
-
-  // ── Read receipts ─────────────────────────────────────────────────────────
 
   Future<void> markAllAsRead({
     required String conversationId,
@@ -193,8 +182,6 @@ class ChatService {
       debugPrint('ChatService: markMessageAsRead error: $e');
     }
   }
-
-  // ── Realtime channels ─────────────────────────────────────────────────────
 
   RealtimeChannel conversationListChannel({
     required String uid,

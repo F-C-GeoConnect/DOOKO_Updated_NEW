@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'my_account.dart';
+import 'package:untitled1/screens/main_screen/my_account.dart';
 import 'add_page.dart';
 import 'chat_page.dart';
 import 'home_page.dart';
@@ -15,11 +15,12 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
 
+  // Change: Initialize the list directly and remove 'late final' to avoid initialization errors
   final List<Widget> _pages = [
     const HomePage(),
     const ListingPage(),
     const AddPage(),
-    const ChatPage(),
+    const ChatPage(), // ChatPage without parameters shows chat list
     const MyAccount(),
   ];
 

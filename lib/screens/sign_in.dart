@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'login_screen.dart';
 import 'otp_verification_screen.dart';
 
@@ -14,18 +16,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _isPasswordVisible = false;
+  String _selectedCountryCode = '+977'; // Nepal country code
 
   @override
   void dispose() {
     _fullNameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  // --- Updated Sign Up Flow ---
   Future<void> _handleSignUp() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -43,7 +49,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
 
       final supabase = Supabase.instance.client;
-      
+
+      // 1. Sign up the user (this sends the OTP)
       await supabase.auth.signUp(
         email: email,
         password: password,
@@ -55,12 +62,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       if (!mounted) return;
       Navigator.pop(context); // Pop loading indicator
 
+      // 2. Navigate to the OTP screen
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => OTPVerificationScreen(
             email: email,
-            password: password,
+            password: password, // Pass password to auto-login after verification
           ),
         ),
       );

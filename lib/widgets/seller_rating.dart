@@ -19,14 +19,14 @@ class SellerRating extends StatelessWidget {
   Widget build(BuildContext context) {
     if (sellerId.isEmpty) return _buildRatingRow(0.0, 0);
 
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: Supabase.instance.client
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: Supabase.instance.client
           .from('farmer_reviews')
-          .stream(primaryKey: ['id'])
+          .select('rating')
           .eq('farmer_id', sellerId),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          debugPrint('Error in SellerRating stream: ${snapshot.error}');
+          debugPrint('Error in SellerRating: ${snapshot.error}');
           return _buildRatingRow(0.0, 0);
         }
 

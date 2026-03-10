@@ -4,7 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../product_profile.dart';
-import '../../widgets/supabase_image.dart'; // IMPORTED shared widget
+import '../../widgets/supabase_image.dart';
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -15,6 +15,18 @@ class MapPage extends StatefulWidget {
 
 class _MapPageState extends State<MapPage> {
   late Future<Position> _locationFuture;
+  String _selectedCategory = 'All';
+
+  final List<String> _categories = [
+    'All',
+    'Vegetables',
+    'Fruits',
+    'Dairy',
+    'Grains',
+    'Meat & Fish',
+    'Honey',
+    'Others'
+  ];
 
   @override
   void initState() {
@@ -50,8 +62,10 @@ class _MapPageState extends State<MapPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Products Near You'),
+        title: const Text('Products Map', style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -60,52 +74,87 @@ class _MapPageState extends State<MapPage> {
           ),
         ],
       ),
-      body: FutureBuilder<Position>(
-        future: _locationFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.green));
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.location_off, size: 64, color: Colors.grey),
-                    const SizedBox(height: 16),
-                    Text(
-                      snapshot.error.toString(),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: _retryLocation,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Try Again'),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                    ),
-                    if (snapshot.error.toString().contains('disabled')) ...[
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () => Geolocator.openLocationSettings(),
-                        child: const Text('Open Settings'),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: Text('Could not fetch location.'));
-          }
+      body: Column(
+        children: [
+          _buildCategoryFilter(),
+          Expanded(
+            child: FutureBuilder<Position>(
+              future: _locationFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.green));
+                }
+                if (snapshot.hasError) {
+                  return _buildErrorState(snapshot.error.toString());
+                }
+                if (!snapshot.hasData) {
+                  return const Center(child: Text('Could not fetch location.'));
+                }
 
-          final userLocation = LatLng(snapshot.data!.latitude, snapshot.data!.longitude);
-          return ProductMap(userLocation: userLocation);
+                final userLocation = LatLng(snapshot.data!.latitude, snapshot.data!.longitude);
+                return ProductMap(
+                  userLocation: userLocation, 
+                  selectedCategory: _selectedCategory,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryFilter() {
+    return Container(
+      height: 60,
+      color: Colors.white,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        itemCount: _categories.length,
+        itemBuilder: (context, index) {
+          final cat = _categories[index];
+          final isSelected = _selectedCategory == cat;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: FilterChip(
+              label: Text(cat, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  _selectedCategory = cat;
+                });
+              },
+              selectedColor: Colors.green.shade100,
+              checkmarkColor: Colors.green,
+              backgroundColor: Colors.grey[100],
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          );
         },
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.location_off, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(error, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _retryLocation,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -113,7 +162,13 @@ class _MapPageState extends State<MapPage> {
 
 class ProductMap extends StatefulWidget {
   final LatLng userLocation;
-  const ProductMap({super.key, required this.userLocation});
+  final String selectedCategory;
+  
+  const ProductMap({
+    super.key, 
+    required this.userLocation,
+    required this.selectedCategory,
+  });
 
   @override
   State<ProductMap> createState() => _ProductMapState();
@@ -129,6 +184,16 @@ class _ProductMapState extends State<ProductMap> {
     _productsFuture = _getProductsForMap();
   }
 
+  @override
+  void didUpdateWidget(ProductMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedCategory != widget.selectedCategory) {
+      // Re-fetch or re-filter products when category changes
+      // In this case, we re-fetch to keep it simple, but filtering locally is also possible
+      _productsFuture = _getProductsForMap();
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _getProductsForMap() async {
     try {
       final response = await Supabase.instance.client.rpc('get_products_for_map');
@@ -139,19 +204,16 @@ class _ProductMapState extends State<ProductMap> {
     }
   }
 
-  // Helper to get signed URL for Map Markers
-  Future<String> _getSignedUrl(String path) async {
-    if (path.startsWith('http')) return path;
-    return await Supabase.instance.client.storage
-        .from('product_images')
-        .createSignedUrl(path, 3600);
-  }
-
   Marker _createProductMarker(BuildContext context, Map<String, dynamic> product) {
     final latitude = product['latitude'] as double? ?? 0.0;
     final longitude = product['longitude'] as double? ?? 0.0;
-    final imagePath = product['imageUrl'] as String? ?? '';
+    final imageUrl = product['imageUrl'] as String? ?? '';
     final name = product['productName'] ?? 'No Name';
+
+    String imagePath = imageUrl;
+    if (imageUrl.contains('product_images/')) {
+      imagePath = imageUrl.split('product_images/').last;
+    }
 
     double distanceInMeters = Geolocator.distanceBetween(
       widget.userLocation.latitude,
@@ -177,16 +239,13 @@ class _ProductMapState extends State<ProductMap> {
                 margin: const EdgeInsets.all(16.0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
                   child: ListTile(
                     leading: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: SupabaseImage( // UPDATED to use SupabaseImage
-                        imagePath: imagePath,
-                        width: 56,
-                        height: 56,
-                        fit: BoxFit.cover,
-                      ),
+                      child: imagePath.isNotEmpty 
+                        ? SupabaseImage(imagePath: imagePath, width: 56, height: 56)
+                        : Container(width: 56, height: 56, color: Colors.grey[200], child: const Icon(Icons.image)),
                     ),
                     title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Column(
@@ -194,7 +253,7 @@ class _ProductMapState extends State<ProductMap> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text('Rs. ${product['price'] ?? 0}'),
-                        Text(distanceString, style: TextStyle(color: Colors.green.shade700, fontSize: 12)),
+                        Text(distanceString, style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
                       ],
                     ),
                     trailing: const Icon(Icons.chevron_right),
@@ -211,43 +270,31 @@ class _ProductMapState extends State<ProductMap> {
             },
           );
         },
-        child: Semantics(
-          label: 'Product: $name at $distanceString',
-          child: Stack(
-            alignment: Alignment.topCenter,
-            children: [
-              const Positioned(
-                bottom: 0,
-                child: Icon(Icons.location_on, color: Colors.green, size: 50),
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            const Positioned(
+              bottom: 0,
+              child: Icon(Icons.location_on, color: Colors.green, size: 50),
+            ),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2)),
+                ],
+                border: Border.all(color: Colors.green, width: 2),
               ),
-              FutureBuilder<String>(
-                future: _getSignedUrl(imagePath),
-                builder: (context, snapshot) {
-                  return Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2)),
-                      ],
-                      border: Border.all(color: Colors.green, width: 2),
-                      image: snapshot.hasData
-                          ? DecorationImage(
-                              image: NetworkImage(snapshot.data!),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: !snapshot.hasData
-                        ? const Center(child: CircularProgressIndicator(strokeWidth: 1))
-                        : null,
-                  );
-                },
+              child: ClipOval(
+                child: imagePath.isNotEmpty 
+                  ? SupabaseImage(imagePath: imagePath, width: 40, height: 40)
+                  : const Icon(Icons.person, color: Colors.grey),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -260,8 +307,15 @@ class _ProductMapState extends State<ProductMap> {
         FutureBuilder<List<Map<String, dynamic>>>(
           future: _productsFuture,
           builder: (context, snapshot) {
-            final products = snapshot.data ?? [];
-            final productMarkers = products.map((product) => _createProductMarker(context, product)).toList();
+            final allProducts = snapshot.data ?? [];
+            
+            // Apply category filtering
+            final filteredProducts = allProducts.where((p) {
+              if (widget.selectedCategory == 'All') return true;
+              return p['category'] == widget.selectedCategory;
+            }).toList();
+
+            final productMarkers = filteredProducts.map((product) => _createProductMarker(context, product)).toList();
 
             return FlutterMap(
               mapController: _mapController,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Displays a circular avatar with the user's photo, or a fallback initial
 /// when [avatarUrl] is empty or fails to load.
@@ -22,8 +23,7 @@ class UserAvatar extends StatelessWidget {
       return CircleAvatar(
         radius: radius,
         backgroundColor: const Color(0xFFE8F5E9),
-        backgroundImage: NetworkImage(avatarUrl),
-        onBackgroundImageError: (_, __) {},
+        backgroundImage: CachedNetworkImageProvider(avatarUrl),
       );
     }
 

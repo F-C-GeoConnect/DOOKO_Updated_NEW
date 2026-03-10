@@ -34,10 +34,10 @@ class AuthGate extends StatelessWidget {
                 return const Scaffold(body: Center(child: CircularProgressIndicator()));
               }
 
-              final profile = (profileSnapshot.data != null && profileSnapshot.data!.isNotEmpty)
-                  ? profileSnapshot.data!.first
+              final profile = (profileSnapshot.data != null && profileSnapshot.data!.isNotEmpty) 
+                  ? profileSnapshot.data!.first 
                   : null;
-
+                  
               final isBanned = profile?['is_banned'] ?? false;
 
               if (isBanned) {

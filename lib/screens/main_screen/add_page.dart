@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/product_service.dart';
 
 class AddPage extends StatefulWidget {
   const AddPage({super.key});
@@ -12,7 +12,9 @@ class AddPage extends StatefulWidget {
 }
 
 class _AddPageState extends State<AddPage> {
+  final _productService = ProductService();
   final _formKey = GlobalKey<FormState>();
+  
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -21,9 +23,25 @@ class _AddPageState extends State<AddPage> {
   File? _imageFile;
   bool _isUploading = false;
   String _selectedUnit = 'per kg';
+  String? _selectedCategory;
+
+  final List<String> _categories = [
+    'Vegetables',
+    'Fruits',
+    'Dairy',
+    'Grains',
+    'Meat & Fish',
+    'Honey',
+    'Others'
+  ];
 
   Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.camera);
+    final picker = ImagePicker();
+    final XFile? pickedFile = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 40,
+    );
+
     if (pickedFile != null) {
       setState(() {
         _imageFile = File(pickedFile.path);
@@ -50,9 +68,9 @@ class _AddPageState extends State<AddPage> {
   }
 
   Future<void> _postProduct() async {
-    if (!_formKey.currentState!.validate() || _imageFile == null) {
+    if (!_formKey.currentState!.validate() || _imageFile == null || _selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields and add an image.')),
+        const SnackBar(content: Text('Please fill all fields, select a category, and add an image.')),
       );
       return;
     }
@@ -62,38 +80,24 @@ class _AddPageState extends State<AddPage> {
     });
 
     try {
-      final supabase = Supabase.instance.client;
-      final user = supabase.auth.currentUser;
-
-      if (user == null) {
-        throw const AuthException('User not authenticated. Please log in again.');
-      }
-
       final Position position = await _determinePosition();
-      final imageFile = _imageFile!;
-      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.${imageFile.path.split('.').last}';
-
-      // 1. Upload the file
-      await supabase.storage.from('product_images').upload(fileName, imageFile);
       
-      // 2. ONLY store the filename/path in the database, NOT the full URL
-      final String imagePath = fileName;
+      // Use ProductService to upload image
+      final imageUrl = await _productService.uploadProductImage(_imageFile!);
 
       final locationString = 'POINT(${position.longitude} ${position.latitude})';
 
-      await supabase.from('products').insert({
-        'productName': _nameController.text,
-        'price': double.tryParse(_priceController.text) ?? 0.0,
-        'description': _descriptionController.text,
-        'imageUrl': imagePath, // Storing "photo.jpg"
-        'sellerName': user.userMetadata?['full_name'] ?? 'Anonymous Seller',
-        'sellerID': user.id,
-        'seller_id': user.id,
-        'location': locationString,
-        'unit': _selectedUnit,
-        'total_quantity': double.tryParse(_totalQuantityController.text) ?? 0.0,
-        'quantity': int.tryParse(_totalQuantityController.text) ?? 0,
-      });
+      // Use ProductService to save product
+      await _productService.postProduct(
+        name: _nameController.text.trim(),
+        price: double.tryParse(_priceController.text) ?? 0.0,
+        description: _descriptionController.text.trim(),
+        imageUrl: imageUrl,
+        category: _selectedCategory!,
+        unit: _selectedUnit,
+        totalQuantity: double.tryParse(_totalQuantityController.text) ?? 0.0,
+        locationString: locationString,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -125,13 +129,14 @@ class _AddPageState extends State<AddPage> {
     setState(() {
       _imageFile = null;
       _selectedUnit = 'per kg';
+      _selectedCategory = null;
     });
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _priceController.clear();
+    _priceController.dispose();
     _descriptionController.dispose();
     _totalQuantityController.dispose();
     super.dispose();
@@ -139,13 +144,16 @@ class _AddPageState extends State<AddPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Product Detail'),
+        title: const Text('Post New Product', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
+        foregroundColor: Colors.black,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -154,27 +162,43 @@ class _AddPageState extends State<AddPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildImagePicker(),
+              _buildImagePicker(colorScheme),
               const SizedBox(height: 24),
-              _buildTextField(_nameController, 'Product Name'),
-              const SizedBox(height: 24),
-              _buildUnitAndPriceSection(),
+              _buildTextField(
+                controller: _nameController, 
+                label: 'Product Name', 
+                icon: Icons.shopping_bag_outlined,
+              ),
               const SizedBox(height: 16),
-              _buildTextField(_descriptionController, 'Product Detail', maxLines: 3),
+              _buildCategoryDropdown(colorScheme),
+              const SizedBox(height: 24),
+              const Text('Pricing & Availability', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              _buildUnitAndPriceSection(colorScheme),
+              const SizedBox(height: 24),
+              _buildTextField(
+                controller: _descriptionController, 
+                label: 'Product Description', 
+                icon: Icons.description_outlined,
+                maxLines: 3,
+              ),
               const SizedBox(height: 32),
               _isUploading
                   ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton(
+                  : ElevatedButton.icon(
                 onPressed: _postProduct,
+                icon: const Icon(Icons.cloud_upload_outlined),
+                label: const Text('Post Product', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Post Product', style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -182,87 +206,112 @@ class _AddPageState extends State<AddPage> {
     );
   }
 
-  Widget _buildImagePicker() {
+  Widget _buildImagePicker(ColorScheme colorScheme) {
     return GestureDetector(
       onTap: _pickImage,
       child: Container(
-        height: 200,
+        height: 220,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(12),
+          color: colorScheme.surfaceVariant.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colorScheme.outline.withOpacity(0.5), width: 1),
         ),
         child: _imageFile != null
             ? ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: Image.file(_imageFile!, fit: BoxFit.cover),
         )
             : Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.camera_alt_outlined, color: Colors.grey[600], size: 40),
-            const SizedBox(height: 8),
-            const Text('Take a photo', style: TextStyle(color: Colors.black54)),
+            Icon(Icons.add_a_photo_rounded, color: colorScheme.primary, size: 48),
+            const SizedBox(height: 12),
+            Text('Take a product photo', 
+              style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 4),
+            Text('Only camera photos are allowed', 
+              style: TextStyle(color: colorScheme.onSurfaceVariant.withOpacity(0.6), fontSize: 12)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, {int maxLines = 1}) {
+  Widget _buildTextField({
+    required TextEditingController controller, 
+    required String label, 
+    required IconData icon,
+    int maxLines = 1
+  }) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
+        prefixIcon: Icon(icon),
         alignLabelWithHint: true,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: Colors.grey[50],
       ),
-      validator: (value) => value!.isEmpty ? '$label can\'t be empty' : null,
+      validator: (value) => value!.trim().isEmpty ? '$label is required' : null,
     );
   }
 
-  Widget _buildUnitAndPriceSection() {
+  Widget _buildCategoryDropdown(ColorScheme colorScheme) {
+    return DropdownButtonFormField<String>(
+      value: _selectedCategory,
+      decoration: InputDecoration(
+        labelText: 'Category',
+        prefixIcon: const Icon(Icons.category_outlined),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: Colors.grey[50],
+      ),
+      items: _categories
+          .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+          .toList(),
+      onChanged: (value) => setState(() => _selectedCategory = value),
+      validator: (value) => value == null ? 'Please select a category' : null,
+    );
+  }
+
+  Widget _buildUnitAndPriceSection(ColorScheme colorScheme) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Pricing & Quantity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              flex: 2,
+              flex: 3,
               child: TextFormField(
                 controller: _priceController,
                 decoration: InputDecoration(
                   labelText: 'Price',
                   prefixText: 'Rs. ',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: Colors.grey[50],
                 ),
                 keyboardType: TextInputType.number,
-                validator: (value) => value!.isEmpty ? 'Price is required' : null,
+                validator: (value) => value!.isEmpty ? 'Required' : null,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
-              flex: 3,
+              flex: 2,
               child: DropdownButtonFormField<String>(
                 value: _selectedUnit,
                 decoration: InputDecoration(
                   labelText: 'Unit',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: Colors.grey[50],
                 ),
                 items: ['per kg', 'per liter', 'per piece']
-                    .map((label) => DropdownMenuItem(child: Text(label), value: label))
+                    .map((u) => DropdownMenuItem(value: u, child: Text(u)))
                     .toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      _selectedUnit = value;
-                    });
-                  }
-                },
+                onChanged: (v) => setState(() => _selectedUnit = v!),
               ),
             ),
           ],
@@ -272,11 +321,15 @@ class _AddPageState extends State<AddPage> {
           controller: _totalQuantityController,
           decoration: InputDecoration(
             labelText: 'Total Quantity Available',
+            hintText: 'e.g. 50',
             suffixText: _selectedUnit.replaceAll('per ', ''),
+            prefixIcon: const Icon(Icons.inventory_2_outlined),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            filled: true,
+            fillColor: Colors.grey[50],
           ),
           keyboardType: TextInputType.number,
-          validator: (value) => value!.isEmpty ? 'Total quantity is required' : null,
+          validator: (value) => value!.isEmpty ? 'Required' : null,
         ),
       ],
     );

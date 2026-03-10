@@ -21,9 +21,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _initRealtimeNotifications();
   }
 
-  /// Fetches an initial snapshot then subscribes to realtime INSERT / UPDATE /
-  /// DELETE events — exactly mirroring the pattern used in home_page.dart so
-  /// both screens always show a consistent view of the notifications table.
   void _initRealtimeNotifications() {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
@@ -31,10 +28,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return;
     }
 
-    // 1. Populate the list immediately.
     _fetchNotifications(userId);
 
-    // 2. Keep it in sync via realtime.
     _channel = _supabase
         .channel('notifications_screen:$userId')
         .onPostgresChanges(
@@ -117,11 +112,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  /// Marks a single notification as read.
-  /// The realtime UPDATE listener patches [_notifications] automatically,
-  /// but we also apply an optimistic update for instant UI feedback.
   Future<void> _markAsRead(String id) async {
-    // Optimistic update.
     setState(() {
       _notifications = _notifications.map((n) {
         return n['id'].toString() == id ? {...n, 'is_read': true} : n;
@@ -135,7 +126,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           .eq('id', id);
     } catch (e) {
       debugPrint('Error marking notification as read: $e');
-      // Re-fetch to roll back on failure.
       final userId = _supabase.auth.currentUser?.id;
       if (userId != null) _fetchNotifications(userId);
     }
@@ -148,7 +138,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final hasUnread = _notifications.any((n) => n['is_read'] == false);
     if (!hasUnread) return;
 
-    // Optimistic update.
     setState(() {
       _notifications = _notifications.map((n) {
         return n['is_read'] == false ? {...n, 'is_read': true} : n;
@@ -174,8 +163,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _deleteNotification(String id) async {
-    // Optimistic removal — the DELETE realtime event will also fire, which is
-    // a no-op because the item is already gone from the list.
     setState(() {
       _notifications =
           _notifications.where((n) => n['id'].toString() != id).toList();
@@ -185,7 +172,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await _supabase.from('notifications').delete().eq('id', id);
     } catch (e) {
       debugPrint('Error deleting notification: $e');
-      // Re-fetch to restore the item on failure.
       final userId = _supabase.auth.currentUser?.id;
       if (userId != null) _fetchNotifications(userId);
     }
@@ -199,6 +185,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -210,36 +198,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
         actions: [
-          TextButton(
-            onPressed: _markAllAsRead,
-            child:
-            const Text('Mark all read', style: TextStyle(color: Colors.green)),
-          ),
+          if (_notifications.isNotEmpty)
+            TextButton.icon(
+              onPressed: _markAllAsRead,
+              icon: const Icon(Icons.done_all, size: 18),
+              label: const Text('Mark all read'),
+              style: TextButton.styleFrom(foregroundColor: colorScheme.primary),
+            ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.green))
+          ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
           : _notifications.isEmpty
-          ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.notifications_none,
-                size: 64, color: Colors.grey[300]),
-            const SizedBox(height: 16),
-            Text(
-              'No notifications yet',
-              style:
-              TextStyle(color: Colors.grey[600], fontSize: 16),
-            ),
-          ],
-        ),
-      )
+          ? _buildEmptyState(colorScheme)
           : ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _notifications.length,
-        separatorBuilder: (context, index) =>
-        const Divider(height: 1),
+        separatorBuilder: (context, index) => const Divider(height: 1, indent: 70),
         itemBuilder: (context, index) {
           final notification = _notifications[index];
           final bool isRead = notification['is_read'] ?? false;
@@ -252,28 +227,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             background: Container(
               alignment: Alignment.centerRight,
               padding: const EdgeInsets.only(right: 20),
-              color: Colors.red,
-              child:
-              const Icon(Icons.delete, color: Colors.white),
+              color: Colors.red.shade400,
+              child: const Icon(Icons.delete_outline, color: Colors.white),
             ),
-            // Optimistic removal happens inside _deleteNotification.
             onDismissed: (_) => _deleteNotification(id),
             child: ListTile(
               onTap: () {
                 if (!isRead) _markAsRead(id);
-                _handleNotificationTap(
-                    type, notification['related_id']);
+                _handleNotificationTap(type, notification['related_id']);
               },
-              contentPadding: const EdgeInsets.symmetric(
-                  vertical: 8, horizontal: 8),
-              leading: _getNotificationIcon(type, isRead),
+              tileColor: isRead ? Colors.transparent : colorScheme.primary.withOpacity(0.03),
+              contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              leading: _getNotificationIcon(type, isRead, colorScheme),
               title: Text(
                 notification['title'] ?? 'Notification',
                 style: TextStyle(
-                  fontWeight: isRead
-                      ? FontWeight.normal
-                      : FontWeight.bold,
-                  fontSize: 16,
+                  fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                  fontSize: 15,
+                  color: isRead ? Colors.black87 : Colors.black,
                 ),
               ),
               subtitle: Column(
@@ -282,23 +253,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   const SizedBox(height: 4),
                   Text(
                     notification['message'] ?? '',
-                    style: TextStyle(color: Colors.grey[600]),
+                    style: TextStyle(color: Colors.grey[700], fontSize: 13),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
                     _formatTimestamp(notification['created_at']),
-                    style: TextStyle(
-                        fontSize: 12, color: Colors.grey[400]),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
               trailing: !isRead
                   ? Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle),
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
               )
                   : null,
             ),
@@ -308,7 +276,46 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _getNotificationIcon(String type, bool isRead) {
+  Widget _buildEmptyState(ColorScheme colorScheme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceVariant.withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.notifications_none_rounded, size: 80, color: colorScheme.primary.withOpacity(0.3)),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'All caught up!',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No new notifications for you right now.',
+            style: TextStyle(color: Colors.grey[600], fontSize: 15),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            ),
+            child: const Text('Go Back'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _getNotificationIcon(String type, bool isRead, ColorScheme colorScheme) {
     IconData iconData;
     Color color;
 
@@ -323,7 +330,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         break;
       case 'selling':
         iconData = Icons.sell_outlined;
-        color = Colors.green;
+        color = colorScheme.primary;
         break;
       case 'availability':
         iconData = Icons.check_circle_outline;
@@ -340,7 +347,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         color: color.withOpacity(0.1),
         shape: BoxShape.circle,
       ),
-      child: Icon(iconData, color: color, size: 24),
+      child: Icon(iconData, color: color, size: 22),
     );
   }
 
@@ -357,19 +364,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _handleNotificationTap(String type, dynamic relatedId) {
-    switch (type) {
-      case 'order':
-      // Navigator.push(context, MaterialPageRoute(builder: (context) => OrderDetails(id: relatedId)));
-        break;
-      case 'selling':
-      // Navigator.push(context, MaterialPageRoute(builder: (context) => InventoryPage()));
-        break;
-      case 'availability':
-      // Navigator.push(context, MaterialPageRoute(builder: (context) => ProductProfile(id: relatedId)));
-        break;
-      case 'delivery':
-      // Navigator.push(context, MaterialPageRoute(builder: (context) => MapTracking(id: relatedId)));
-        break;
-    }
+    // Handle taps...
   }
 }

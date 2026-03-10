@@ -7,6 +7,7 @@ class ProduceListing {
   final String? unit;
   final String? imageUrl;
   final String? description;
+  final String? category;
   final bool available;
   final DateTime? harvestDate;
 
@@ -23,6 +24,7 @@ class ProduceListing {
     this.unit,
     this.imageUrl,
     this.description,
+    this.category,
     this.available = true,
     this.harvestDate,
     this.farmerName,
@@ -41,6 +43,7 @@ class ProduceListing {
       unit: json['unit'],
       imageUrl: json['image_url'],
       description: json['description'],
+      category: json['category'],
       available: json['available'] ?? true,
       harvestDate: json['harvest_date'] != null
           ? DateTime.parse(json['harvest_date'])
