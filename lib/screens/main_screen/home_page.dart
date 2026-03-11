@@ -335,7 +335,7 @@ class _HomePageState extends State<HomePage> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('DOKO',
+            Text('DOOKO',
                 style: TextStyle(
                     color: Colors.green.shade800,
                     fontWeight: FontWeight.bold,
@@ -669,23 +669,27 @@ class PromoBanner extends StatelessWidget {
   const PromoBanner({super.key});
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
+      width: double.infinity,
       height: 150,
-      decoration: BoxDecoration(
-          color: Colors.amber[100],
-          borderRadius: BorderRadius.circular(15)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(15),
-        child: CachedNetworkImage(
-          imageUrl:
-          'https://clipart-library.com/2023/5f0d0ab64520712d29e2c2fd_NEW20Summer20Market20Logo20white.png',
+        child: Image.asset(
+          'assets/farmers_market.jpeg',
           fit: BoxFit.cover,
-          errorWidget: (context, url, error) => Center(
-              child: Text('Summer Market',
+          width: double.infinity,
+          errorBuilder: (context, error, stackTrace) => Container(
+            decoration: BoxDecoration(
+                color: Colors.amber[100],
+                borderRadius: BorderRadius.circular(15)),
+            child: Center(
+              child: Text('Farmers Market',
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.orange[900]))),
+                      color: Colors.orange[900])),
+            ),
+          ),
         ),
       ),
     );

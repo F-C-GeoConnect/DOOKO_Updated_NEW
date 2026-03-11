@@ -52,3 +52,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/app_banner.jpeg
+    - assets/new_logowithGPS.jpeg
+    - assets/farmers_market.jpeg
