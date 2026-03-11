@@ -15,7 +15,7 @@ class AddPage extends StatefulWidget {
 class _AddPageState extends State<AddPage> {
   final _productService = ProductService();
   final _formKey = GlobalKey<FormState>();
-  
+
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -82,7 +82,7 @@ class _AddPageState extends State<AddPage> {
 
     try {
       final Position position = await _determinePosition();
-      
+
       final imageUrl = await _productService.uploadProductImage(_imageFile!);
 
       final locationString = 'POINT(${position.longitude} ${position.latitude})';
@@ -93,7 +93,7 @@ class _AddPageState extends State<AddPage> {
         price: double.tryParse(_priceController.text) ?? 0.0,
         description: _descriptionController.text.trim(),
         imageUrl: imageUrl,
-        category: _selectedCategory!, 
+        category: _selectedCategory!,
         unit: _selectedUnit,
         totalQuantity: double.tryParse(_totalQuantityController.text) ?? 0.0,
         locationString: locationString,
@@ -184,8 +184,8 @@ class _AddPageState extends State<AddPage> {
               _buildImagePicker(colorScheme),
               const SizedBox(height: 24),
               _buildTextField(
-                controller: _nameController, 
-                label: 'Product Name', 
+                controller: _nameController,
+                label: 'Product Name',
                 icon: Icons.shopping_bag_outlined,
               ),
               const SizedBox(height: 16),
@@ -196,8 +196,8 @@ class _AddPageState extends State<AddPage> {
               _buildUnitAndPriceSection(colorScheme),
               const SizedBox(height: 24),
               _buildTextField(
-                controller: _descriptionController, 
-                label: 'Product Description', 
+                controller: _descriptionController,
+                label: 'Product Description',
                 icon: Icons.description_outlined,
                 maxLines: 3,
               ),
@@ -246,11 +246,11 @@ class _AddPageState extends State<AddPage> {
           children: [
             Icon(Icons.add_a_photo_rounded, color: colorScheme.primary, size: 48),
             const SizedBox(height: 12),
-            Text('Take a product photo', 
-              style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
+            Text('Take a product photo',
+                style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
             const SizedBox(height: 4),
-            Text('Only camera photos are allowed', 
-              style: TextStyle(color: colorScheme.onSurfaceVariant.withOpacity(0.6), fontSize: 12)),
+            Text('Only camera photos are allowed',
+                style: TextStyle(color: colorScheme.onSurfaceVariant.withOpacity(0.6), fontSize: 12)),
           ],
         ),
       ),
@@ -258,8 +258,8 @@ class _AddPageState extends State<AddPage> {
   }
 
   Widget _buildTextField({
-    required TextEditingController controller, 
-    required String label, 
+    required TextEditingController controller,
+    required String label,
     required IconData icon,
     int maxLines = 1
   }) {

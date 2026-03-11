@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../login_screen.dart';
 import 'orders_history_screen.dart';
-import 'admin_panel.dart';
+import '../admin/admin_panel.dart';
 
 class MyAccount extends StatefulWidget {
   const MyAccount({super.key});
@@ -421,23 +421,21 @@ class _MyAccountState extends State<MyAccount> {
                       fillColor: Colors.grey[50],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 32),
                   SizedBox(
-                    width: double.infinity, height: 50,
+                    width: double.infinity,
+                    height: 54,
                     child: ElevatedButton(
-                      onPressed: _isSaving ? null : () async {
-                        setModalState(() => _isSaving = true);
-                        await _updateProfile();
-                        if (mounted) setModalState(() => _isSaving = false);
-                      },
+                      onPressed: _isSaving ? null : _updateProfile,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green, 
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
                       child: _isSaving 
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

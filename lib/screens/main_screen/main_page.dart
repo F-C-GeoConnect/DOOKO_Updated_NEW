@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:untitled1/providers/chat_provider.dart';
 import 'package:untitled1/screens/main_screen/my_account.dart';
+import 'package:untitled1/services/notification_service.dart';
 import 'add_page.dart';
 import 'chat_page.dart';
 import 'home_page.dart';
@@ -16,6 +17,7 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
+  final _notificationService = NotificationService();
 
   final List<Widget> _pages = [
     const HomePage(),
@@ -24,6 +26,13 @@ class _MainPageState extends State<MainPage> {
     const ChatPage(),
     const MyAccount(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize push notifications when user enters main app
+    _notificationService.initNotifications();
+  }
 
   void _onItemTapped(int index) {
     setState(() {
