@@ -77,6 +77,38 @@ class _AdminPanelState extends State<AdminPanel> {
     }
   }
 
+  Future<void> _toggleVerifyUser(String userId, String name, bool currentVerifyStatus) async {
+    final action = currentVerifyStatus ? 'Unverify' : 'Verify';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$action User'),
+        content: Text('Are you sure you want to $action "$name"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: Text(action, style: TextStyle(color: currentVerifyStatus ? Colors.orange : Colors.blue))
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _supabase.from('profiles').update({'is_verified': !currentVerifyStatus}).eq('id', userId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('User ${currentVerifyStatus ? "unverified" : "verified"} successfully.'))
+          );
+        }
+        setState(() {}); 
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -163,6 +195,7 @@ class _AdminPanelState extends State<AdminPanel> {
             final u = users[index];
             final bool isAdmin = u['is_admin'] ?? false;
             final bool isBanned = u['is_banned'] ?? false;
+            final bool isVerified = u['is_verified'] ?? false;
             final String userId = u['id'];
             final String userName = u['full_name'] ?? 'No Name';
 
@@ -175,16 +208,30 @@ class _AdminPanelState extends State<AdminPanel> {
                     ? Text(userName[0].toUpperCase()) 
                     : null,
               ),
-              title: Text(userName, style: TextStyle(
-                decoration: isBanned ? TextDecoration.lineThrough : null,
-                color: isBanned ? Colors.grey : Colors.black,
-              )),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(userName, style: TextStyle(
+                      decoration: isBanned ? TextDecoration.lineThrough : null,
+                      color: isBanned ? Colors.grey : Colors.black,
+                    )),
+                  ),
+                  if (isVerified) const Icon(Icons.verified, color: Colors.green, size: 16),
+                ],
+              ),
               subtitle: Text(isAdmin ? 'Administrator' : (isBanned ? 'BANNED' : 'User')),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isAdmin) const Icon(Icons.verified_user, color: Colors.blue, size: 20),
-                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(
+                      isVerified ? Icons.verified : Icons.verified_outlined, 
+                      color: isVerified ? Colors.green : Colors.grey, 
+                      size: 20
+                    ),
+                    tooltip: isVerified ? 'Unverify User' : 'Verify User',
+                    onPressed: () => _toggleVerifyUser(userId, userName, isVerified),
+                  ),
                   IconButton(
                     icon: Icon(
                       isBanned ? Icons.gavel : Icons.block, 

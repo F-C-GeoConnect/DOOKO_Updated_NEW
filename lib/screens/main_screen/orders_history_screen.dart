@@ -35,7 +35,7 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
           .select('*, items')
           .or('buyer_id.eq.$userId,seller_id.eq.$userId')
           .order('created_at', ascending: false);
-      
+
       return List<Map<String, dynamic>>.from(data);
     } catch (e) {
       debugPrint('Error fetching orders: $e');
@@ -53,7 +53,7 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
           .from('orders')
           .update({'status': 'accepted'})
           .eq('id', orderId);
-      
+
       // 2. Decrease stock for each product in the order
       for (var item in items) {
         final productId = item['product_id'];
@@ -84,7 +84,7 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
           }
         }
       }
-      
+
       if (mounted) {
         setState(() {
           _ordersFuture = _fetchOrders();
@@ -109,7 +109,7 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
           .from('orders')
           .update({'status': newStatus})
           .eq('id', orderId);
-      
+
       if (mounted) {
         setState(() {
           _ordersFuture = _fetchOrders();
@@ -149,24 +149,24 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return Center(child: CircularProgressIndicator(color: colorScheme.primary));
             }
-            
+
             final orders = snapshot.data ?? [];
-    
+
             if (orders.isEmpty) {
               return _buildEmptyState(colorScheme);
             }
-    
+
             return ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               itemCount: orders.length,
               itemBuilder: (context, index) {
                 final order = orders[index];
-                final orderId = order['id']; 
+                final orderId = order['id'];
                 final bool isBuyer = order['buyer_id'] == currentUserId;
                 final String status = order['status'] ?? 'pending';
                 final items = order['items'] as List<dynamic>;
                 final createdAt = DateTime.tryParse(order['created_at'] ?? '')?.toLocal();
-                
+
                 final totalAmount = num.tryParse(order['total_amount'].toString()) ?? 0.0;
 
                 return Card(
@@ -221,7 +221,7 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
                           ...items.map((item) {
                             final itemPrice = num.tryParse(item['price'].toString()) ?? 0.0;
                             final itemQty = num.tryParse(item['quantity'].toString()) ?? 0;
-                            
+
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Row(
@@ -232,17 +232,17 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
                                       color: Colors.grey[100],
                                       borderRadius: BorderRadius.circular(6),
                                     ),
-                                    child: Text('${itemQty}x', 
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                    child: Text('${itemQty}x',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
-                                    child: Text(item['product_name'] ?? 'Unknown Product', 
-                                      style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
-                                      overflow: TextOverflow.ellipsis),
+                                    child: Text(item['product_name'] ?? 'Unknown Product',
+                                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                                        overflow: TextOverflow.ellipsis),
                                   ),
                                   Text(_currencyFormat.format(itemPrice * itemQty),
-                                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                                      style: const TextStyle(fontWeight: FontWeight.w500)),
                                 ],
                               ),
                             );
@@ -253,10 +253,10 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
                             children: [
                               const Text('Total Amount', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
                               Text(_currencyFormat.format(totalAmount),
-                                style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary, fontSize: 18)),
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary, fontSize: 18)),
                             ],
                           ),
-                          
+
                           if (!isBuyer && status == 'pending') ...[
                             const SizedBox(height: 16),
                             Row(
@@ -303,11 +303,11 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
                             const SizedBox(height: 16),
                             _buildAdminActionButton(orderId, 'completed', 'Mark as Delivered', Colors.green),
                           ],
-                          
+
                           const SizedBox(height: 12),
                           Center(
-                            child: Text('Tap to view delivery journey', 
-                              style: TextStyle(color: colorScheme.primary.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w500)),
+                            child: Text('Tap to view delivery journey',
+                                style: TextStyle(color: colorScheme.primary.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w500)),
                           ),
                         ],
                       ),
@@ -340,8 +340,8 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
             const SizedBox(height: 24),
             const Text('No orders yet', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text('Your order history will appear here.', 
-              style: TextStyle(color: Colors.grey[600], fontSize: 15)),
+            Text('Your order history will appear here.',
+                style: TextStyle(color: Colors.grey[600], fontSize: 15)),
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
@@ -387,7 +387,7 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
       case 'cancelled': color = Colors.red; break;
       default: color = Colors.grey;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(

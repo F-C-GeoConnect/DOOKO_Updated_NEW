@@ -151,9 +151,9 @@ class _ListingPageState extends State<ListingPage> {
         if (snapshot.hasError) {
           return Center(child: Text('Something went wrong: ${snapshot.error}'));
         }
-        
+
         final products = snapshot.data ?? [];
-        
+
         if (products.isEmpty) {
           return const Center(
             child: Padding(

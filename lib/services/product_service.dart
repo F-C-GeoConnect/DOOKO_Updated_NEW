@@ -4,17 +4,35 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class ProductService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  Future<List<Map<String, dynamic>>> getProductsForHomepage() async {
+  /// Helper to get the storage path from a full URL or path string
+  static String getStoragePath(String? urlOrPath) {
+    if (urlOrPath == null || urlOrPath.isEmpty) return '';
+    if (urlOrPath.contains('product_images/')) {
+      return urlOrPath.split('product_images/').last;
+    }
+    return urlOrPath;
+  }
+
+  Future<List<Map<String, dynamic>>> getProductsForHomepage({int offset = 0, int limit = 10}) async {
     try {
+      // Note: If the RPC 'get_products_for_homepage' doesn't support pagination,
+      // you might need to update the database function or use a standard query.
+      // For now, we'll try to use a standard query to support pagination and joins.
       final response = await _supabase
           .from('products')
-          .select('*') 
-          .order('created_at', ascending: false);
-      
+          .select('*, profiles:seller_id(is_verified)')
+          .order('created_at', ascending: false)
+          .range(offset, offset + limit - 1);
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetching products: $e');
-      rethrow;
+      // Fallback to RPC if the join/range fails (though it shouldn't if schema is correct)
+      try {
+        final response = await _supabase.rpc('get_products_for_homepage');
+        return (response as List).map((item) => item as Map<String, dynamic>).toList();
+      } catch (rpcError) {
+        rethrow;
+      }
     }
   }
 
@@ -22,9 +40,8 @@ class ProductService {
     try {
       final String fileName = '${DateTime.now().millisecondsSinceEpoch}.${imageFile.path.split('.').last}';
       await _supabase.storage.from('product_images').upload(fileName, imageFile);
-      return fileName;
+      return _supabase.storage.from('product_images').getPublicUrl(fileName);
     } catch (e) {
-      print('Error uploading image: $e');
       rethrow;
     }
   }
@@ -54,28 +71,28 @@ class ProductService {
         'location': locationString,
         'unit': unit,
         'category': category,
-        'total_quantity': totalQuantity, // Using total_quantity only
+        'total_quantity': totalQuantity,
       });
     } catch (e) {
       rethrow;
     }
   }
 
-  Future<Map<String, dynamic>> getProductStockInfo(int productId) async {
+  /// OPTIMAL: Atomic stock reduction using RPC
+  Future<void> reduceStockAtomic(int productId, double amount) async {
     try {
-      return await _supabase
-          .from('products')
-          .select('total_quantity, seller_id, productName')
-          .eq('id', productId)
-          .single();
+      await _supabase.rpc('reduce_stock', params: {
+        'p_id': productId,
+        'p_amount': amount,
+      });
     } catch (e) {
-      rethrow;
+      throw 'Failed to update stock: $e';
     }
   }
 
-  Future<void> updateProductStock(int productId, double remainingQuantity) async {
+  Future<void> updateProductStock(int productId, double newQuantity) async {
     try {
-      await _supabase.from('products').update({'total_quantity': remainingQuantity}).eq('id', productId);
+      await _supabase.from('products').update({'total_quantity': newQuantity}).eq('id', productId);
     } catch (e) {
       rethrow;
     }

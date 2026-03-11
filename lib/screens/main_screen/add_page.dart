@@ -68,6 +68,7 @@ class _AddPageState extends State<AddPage> {
   }
 
   Future<void> _postProduct() async {
+    // FIXED: Explicitly check if _selectedCategory is null before proceeding
     if (!_formKey.currentState!.validate() || _imageFile == null || _selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields, select a category, and add an image.')),
@@ -82,18 +83,17 @@ class _AddPageState extends State<AddPage> {
     try {
       final Position position = await _determinePosition();
       
-      // Use ProductService to upload image
       final imageUrl = await _productService.uploadProductImage(_imageFile!);
 
       final locationString = 'POINT(${position.longitude} ${position.latitude})';
 
-      // Use ProductService to save product
+      // Use the local _selectedCategory state variable
       await _productService.postProduct(
         name: _nameController.text.trim(),
         price: double.tryParse(_priceController.text) ?? 0.0,
         description: _descriptionController.text.trim(),
         imageUrl: imageUrl,
-        category: _selectedCategory!,
+        category: _selectedCategory!, // Passing the selected category
         unit: _selectedUnit,
         totalQuantity: double.tryParse(_totalQuantityController.text) ?? 0.0,
         locationString: locationString,
@@ -129,7 +129,7 @@ class _AddPageState extends State<AddPage> {
     setState(() {
       _imageFile = null;
       _selectedUnit = 'per kg';
-      _selectedCategory = null;
+      _selectedCategory = null; // Reset category selection
     });
   }
 
@@ -272,7 +272,11 @@ class _AddPageState extends State<AddPage> {
       items: _categories
           .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
           .toList(),
-      onChanged: (value) => setState(() => _selectedCategory = value),
+      onChanged: (value) {
+        setState(() {
+          _selectedCategory = value;
+        });
+      },
       validator: (value) => value == null ? 'Please select a category' : null,
     );
   }

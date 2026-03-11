@@ -11,7 +11,8 @@ class UserProfile {
   final String? address;
   final double deliveryRadiusKm;
   final String? profileImageUrl;
-  final bool isAdmin; // Added isAdmin
+  final bool isAdmin;
+  final bool isVerified; // Added isVerified
 
   UserProfile({
     required this.id,
@@ -23,12 +24,13 @@ class UserProfile {
     this.deliveryRadiusKm = 5.0,
     this.profileImageUrl,
     this.isAdmin = false,
+    this.isVerified = false, // Default to false
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
       id: json['id'] ?? '',
-      name: json['full_name'] ?? json['name'] ?? 'User', // Updated to match Supabase profile field
+      name: json['full_name'] ?? json['name'] ?? 'User',
       phone: json['phone'] ?? '',
       role: _parseRole(json['role'] ?? ''),
       location: json['location'] != null
@@ -36,8 +38,9 @@ class UserProfile {
           : null,
       address: json['address'],
       deliveryRadiusKm: (json['delivery_radius_km'] ?? 5.0).toDouble(),
-      profileImageUrl: json['avatar_url'] ?? json['profile_image_url'], // Support both names
+      profileImageUrl: json['avatar_url'] ?? json['profile_image_url'],
       isAdmin: json['is_admin'] ?? false,
+      isVerified: json['is_verified'] ?? false, // Parse is_verified
     );
   }
 
@@ -53,7 +56,7 @@ class UserProfile {
   static LatLng? _parseLocation(dynamic location) {
     if (location is Map) {
       final coords = location['coordinates'] as List;
-      return LatLng(coords[1], coords[0]); 
+      return LatLng(coords[1], coords[0]);
     }
     return null;
   }

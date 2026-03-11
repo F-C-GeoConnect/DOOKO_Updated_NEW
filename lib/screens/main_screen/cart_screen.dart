@@ -85,7 +85,6 @@ class _CartScreenState extends State<CartScreen> {
       final List<Map<String, dynamic>> productDataList = [];
 
       for (var item in itemsToOrder) {
-        // Fetch current stock from 'products' table
         final productData = await supabase.from('products').select('total_quantity, seller_id, productName').eq('id', item.id).single();
         
         if (productData['seller_id'] == user.id) {
@@ -103,7 +102,6 @@ class _CartScreenState extends State<CartScreen> {
         final item = itemsToOrder[i];
         final productData = productDataList[i];
 
-        // 1. Create the order
         await supabase.from('orders').insert({
           'buyer_id': user.id,
           'seller_id': productData['seller_id'],
@@ -122,15 +120,12 @@ class _CartScreenState extends State<CartScreen> {
           }],
         });
 
-        // 2. Decrease the stock in 'products' table immediately upon order placement
         final currentStock = (productData['total_quantity'] as num).toDouble();
         final newStock = currentStock - item.quantity;
         
         if (newStock <= 0) {
-          // If stock hits 0, delete the listing
           await supabase.from('products').delete().eq('id', item.id);
         } else {
-          // Update with reduced stock
           await supabase.from('products').update(
             {'total_quantity': newStock}
           ).eq('id', item.id);

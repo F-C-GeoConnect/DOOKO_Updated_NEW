@@ -35,20 +35,20 @@ class ProduceListing {
     return ProduceListing(
       id: json['listing_id'] ?? json['id'],
       userId: json['farmer_id'] ?? json['user_id'],
-      name: json['produce_name'] ?? json['name'],
-      price: (json['price'] as num).toDouble(),
-      quantity: json['quantity'] != null
-          ? (json['quantity'] as num).toDouble()
+      name: json['produce_name'] ?? json['name'] ?? json['productName'],
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      quantity: (json['total_quantity'] ?? json['quantity']) != null
+          ? (json['total_quantity'] ?? json['quantity'] as num).toDouble()
           : null,
       unit: json['unit'],
-      imageUrl: json['image_url'],
+      imageUrl: json['image_url'] ?? json['imageUrl'],
       description: json['description'],
       category: json['category'],
       available: json['available'] ?? true,
       harvestDate: json['harvest_date'] != null
           ? DateTime.parse(json['harvest_date'])
           : null,
-      farmerName: json['farmer_name'],
+      farmerName: json['farmer_name'] ?? json['sellerName'],
       distanceKm: json['distance_km'] != null
           ? (json['distance_km'] as num).toDouble()
           : null,

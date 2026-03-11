@@ -1,7 +1,6 @@
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:untitled1/screens/product_profile.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,6 +12,7 @@ import '../../widgets/product_rating.dart';
 import '../../widgets/supabase_image.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../services/product_service.dart';
+import '../product_profile.dart';
 import 'cart_screen.dart';
 import 'notifications_screen.dart';
 import 'map.dart';
@@ -27,8 +27,15 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _productService = ProductService();
-  late Future<List<Map<String, dynamic>>> _productsFuture;
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+
+  List<Map<String, dynamic>> _allProducts = [];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _currentOffset = 0;
+  final int _pageSize = 10;
 
   double _searchRadius = 20;
   Position? _currentUserPosition;
@@ -51,35 +58,84 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _productsFuture = _productService.getProductsForHomepage();
+    _initData();
     _initRealtimeNotifications();
 
     _searchController.addListener(() {
       setState(() {});
     });
 
-    _determinePosition().then((position) {
-      if (mounted) {
-        setState(() {
-          _currentUserPosition = position;
-        });
-      }
-    }).catchError((e) {
-      if (mounted) {
-        debugPrint('Could not get location: $e');
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+        if (!_isLoadingMore && _hasMore) {
+          _loadMoreProducts();
+        }
       }
     });
   }
 
+  Future<void> _initData() async {
+    setState(() => _isLoading = true);
+    try {
+      _currentUserPosition = await _determinePosition();
+    } catch (e) {
+      debugPrint('Could not get location: $e');
+    }
+    await _refreshProducts();
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _refreshProducts() async {
+    _currentOffset = 0;
+    _hasMore = true;
+    try {
+      final products = await _productService.getProductsForHomepage(offset: 0, limit: _pageSize);
+      if (mounted) {
+        setState(() {
+          _allProducts = products;
+          _hasMore = products.length == _pageSize;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error refreshing products: $e');
+    }
+  }
+
+  Future<void> _loadMoreProducts() async {
+    if (_isLoadingMore || !_hasMore) return;
+
+    setState(() => _isLoadingMore = true);
+    _currentOffset += _pageSize;
+
+    try {
+      final newProducts = await _productService.getProductsForHomepage(
+        offset: _currentOffset, 
+        limit: _pageSize
+      );
+      
+      if (mounted) {
+        setState(() {
+          _allProducts.addAll(newProducts);
+          _hasMore = newProducts.length == _pageSize;
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading more products: $e');
+      if (mounted) setState(() => _isLoadingMore = false);
+    }
+  }
+
   Future<void> _handleRefresh() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId != null) await _fetchNotifications(userId);
+    if (userId != null) _fetchNotifications(userId);
 
-    final position = await _determinePosition();
-    setState(() {
-      _currentUserPosition = position;
-      _productsFuture = _productService.getProductsForHomepage();
-    });
+    try {
+      _currentUserPosition = await _determinePosition();
+    } catch (e) {
+      debugPrint('Location refresh error: $e');
+    }
+    await _refreshProducts();
   }
 
   Future<Position> _determinePosition() async {
@@ -110,13 +166,8 @@ class _HomePageState extends State<HomePage> {
     return 12742 * asin(sqrt(a));
   }
 
-  /// Safely extracts lat/lng from:
-  /// 1. Flat latitude/longitude fields (num)
-  /// 2. WKT POINT string: "POINT(lng lat)"
-  /// 3. WKB hex string: "0101000020E6100000..." (PostGIS binary)
   _LatLng? _getCoordinates(Map<String, dynamic> product) {
     try {
-      // 1. Flat fields
       final rawLat = product['latitude'];
       final rawLng = product['longitude'];
       if (rawLat != null && rawLng != null) {
@@ -129,7 +180,6 @@ class _HomePageState extends State<HomePage> {
       final location = product['location'] as String?;
       if (location == null) return null;
 
-      // 2. WKT POINT format
       if (location.contains('POINT')) {
         final raw =
         location.replaceAll('POINT(', '').replaceAll(')', '').trim();
@@ -141,17 +191,10 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
-      // 3. WKB hex format (PostGIS) — e.g. "0101000020E6100000..."
-      //    Byte layout (little-endian EWKB with SRID):
-      //    [1 byte]  byte order = 01 (little-endian)
-      //    [4 bytes] geometry type = 01000020 (Point with SRID flag)
-      //    [4 bytes] SRID = E6100000 (4326)
-      //    [8 bytes] X / longitude  ← bytes 10–17
-      //    [8 bytes] Y / latitude   ← bytes 18–25
       if (location.length >= 50) {
         final hex = location.trim().toUpperCase();
-        final lng = _parseWkbDouble(hex, 18); // X = longitude
-        final lat = _parseWkbDouble(hex, 34); // Y = latitude
+        final lng = _parseWkbDouble(hex, 18); 
+        final lat = _parseWkbDouble(hex, 34); 
         if (lat != null && lng != null) return _LatLng(lat, lng);
       }
     } catch (e) {
@@ -160,17 +203,13 @@ class _HomePageState extends State<HomePage> {
     return null;
   }
 
-  /// Reads 8 bytes (16 hex chars) from [hex] starting at char offset [charOffset],
-  /// interprets them as a little-endian IEEE 754 double.
   double? _parseWkbDouble(String hex, int charOffset) {
     try {
       if (hex.length < charOffset + 16) return null;
       final chunk = hex.substring(charOffset, charOffset + 16);
-      // Reverse byte order (little-endian → big-endian)
       final bytes = List<int>.generate(8, (i) {
         return int.parse(chunk.substring((7 - i) * 2, (7 - i) * 2 + 2), radix: 16);
       });
-      // Reconstruct the 64-bit double from bytes
       int bits = 0;
       for (final b in bytes) {
         bits = (bits << 8) | b;
@@ -279,6 +318,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     _notificationsChannel?.unsubscribe();
     super.dispose();
   }
@@ -379,6 +419,7 @@ class _HomePageState extends State<HomePage> {
       body: RefreshableWrapper(
         onRefresh: _handleRefresh,
         child: SingleChildScrollView(
+          controller: _scrollController,
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,6 +433,11 @@ class _HomePageState extends State<HomePage> {
               _buildSectionHeader('Browse Products'),
               const SizedBox(height: 10),
               _buildProductGrid(),
+              if (_isLoadingMore)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Center(child: CircularProgressIndicator(color: Colors.green)),
+                ),
             ],
           ),
         ),
@@ -478,129 +524,115 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildProductGrid() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _productsFuture,
-      builder: (context, snapshot) {
-        // Show shimmer while location or products are loading
-        if (_currentUserPosition == null ||
-            snapshot.connectionState == ConnectionState.waiting) {
-          return GridView.builder(
-            physics: const NeverScrollableScrollPhysics(),
-            shrinkWrap: true,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 15,
-                mainAxisSpacing: 15,
-                childAspectRatio: 0.8),
-            itemCount: 6,
-            itemBuilder: (context, index) => const ProductCardShimmer(),
-          );
-        }
+    if (_isLoading && _allProducts.isEmpty) {
+      return GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        shrinkWrap: true,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 15,
+            mainAxisSpacing: 15,
+            childAspectRatio: 0.8),
+        itemCount: 6,
+        itemBuilder: (context, index) => const ProductCardShimmer(),
+      );
+    }
 
-        if (snapshot.hasError)
-          return Center(child: Text('Error: ${snapshot.error}'));
+    if (_currentUserPosition == null && _isLoading) {
+       return const Center(child: CircularProgressIndicator());
+    }
 
-        final allProducts = snapshot.data ?? [];
-        if (allProducts.isEmpty)
-          return const Center(child: Text('No products available yet.'));
+    final filteredProducts = _allProducts.where((product) {
+      final productName =
+      (product['productName'] as String? ?? '').toLowerCase();
+      final searchText = _searchController.text.trim().toLowerCase();
+      final matchesSearch =
+          searchText.isEmpty || productName.contains(searchText);
 
-        // ── FILTER ──────────────────────────────────────────────────────────
-        final filteredProducts = allProducts.where((product) {
-          // 1. Search text match
-          final productName =
-          (product['productName'] as String? ?? '').toLowerCase();
-          final searchText = _searchController.text.trim().toLowerCase();
-          final matchesSearch =
-              searchText.isEmpty || productName.contains(searchText);
+      final productCategory =
+      (product['category'] as String? ?? '').trim();
+      final matchesCategory = _selectedCategory == 'All' ||
+          productCategory == _selectedCategory;
 
-          // 2. Category match — compare original-case strings directly
-          final productCategory =
-          (product['category'] as String? ?? '').trim();
-          final matchesCategory = _selectedCategory == 'All' ||
-              productCategory == _selectedCategory;
+      final coords = _getCoordinates(product);
+      if (coords == null) return false;
 
-          // 3. Radius match — products WITHOUT coordinates are excluded
-          final coords = _getCoordinates(product);
-          if (coords == null) return false;
-          final distance = _calculateDistance(
+      if (_currentUserPosition == null) return matchesSearch && matchesCategory;
+
+      final distance = _calculateDistance(
+        _currentUserPosition!.latitude,
+        _currentUserPosition!.longitude,
+        coords.latitude,
+        coords.longitude,
+      );
+      final matchesRadius = distance <= _searchRadius;
+
+      return matchesSearch && matchesCategory && matchesRadius;
+    }).toList();
+
+    if (_currentUserPosition != null) {
+      filteredProducts.sort((a, b) {
+        final coordsA = _getCoordinates(a);
+        final coordsB = _getCoordinates(b);
+        if (coordsA == null) return 1;
+        if (coordsB == null) return -1;
+        final distA = _calculateDistance(
             _currentUserPosition!.latitude,
             _currentUserPosition!.longitude,
-            coords.latitude,
-            coords.longitude,
-          );
-          final matchesRadius = distance <= _searchRadius;
+            coordsA.latitude,
+            coordsA.longitude);
+        final distB = _calculateDistance(
+            _currentUserPosition!.latitude,
+            _currentUserPosition!.longitude,
+            coordsB.latitude,
+            coordsB.longitude);
+        return distA.compareTo(distB);
+      });
+    }
 
-          return matchesSearch && matchesCategory && matchesRadius;
-        }).toList();
+    if (filteredProducts.isEmpty && !_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: Text(
+            'No products found in this category or radius.\nTry increasing the radius or selecting "All".',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
 
-        // ── SORT: nearest first ──────────────────────────────────────────────
-        filteredProducts.sort((a, b) {
-          final coordsA = _getCoordinates(a);
-          final coordsB = _getCoordinates(b);
-          if (coordsA == null) return 1;
-          if (coordsB == null) return -1;
-          final distA = _calculateDistance(
-              _currentUserPosition!.latitude,
-              _currentUserPosition!.longitude,
-              coordsA.latitude,
-              coordsA.longitude);
-          final distB = _calculateDistance(
-              _currentUserPosition!.latitude,
-              _currentUserPosition!.longitude,
-              coordsB.latitude,
-              coordsB.longitude);
-          return distA.compareTo(distB);
-        });
-
-        if (filteredProducts.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32.0),
-              child: Text(
-                'No products found in this category or radius.\nTry increasing the radius or selecting "All".',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          );
-        }
-
-        return GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          shrinkWrap: true,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 15,
-              mainAxisSpacing: 15,
-              childAspectRatio: 0.8),
-          itemCount: filteredProducts.length,
-          itemBuilder: (context, index) {
-            final product = filteredProducts[index];
-            final coords = _getCoordinates(product);
-            final distance = coords == null
-                ? null
-                : _calculateDistance(
-              _currentUserPosition!.latitude,
-              _currentUserPosition!.longitude,
-              coords.latitude,
-              coords.longitude,
-            );
-            return ProductCard(product: product, distance: distance);
-          },
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 15,
+          mainAxisSpacing: 15,
+          childAspectRatio: 0.8),
+      itemCount: filteredProducts.length,
+      itemBuilder: (context, index) {
+        final product = filteredProducts[index];
+        final coords = _getCoordinates(product);
+        final distance = (coords == null || _currentUserPosition == null)
+            ? null
+            : _calculateDistance(
+          _currentUserPosition!.latitude,
+          _currentUserPosition!.longitude,
+          coords.latitude,
+          coords.longitude,
         );
+        return ProductCard(product: product, distance: distance);
       },
     );
   }
 }
-
-// ── Helper class ─────────────────────────────────────────────────────────────
 
 class _LatLng {
   final double latitude;
   final double longitude;
   _LatLng(this.latitude, this.longitude);
 }
-
-// ── PromoBanner ───────────────────────────────────────────────────────────────
 
 class PromoBanner extends StatelessWidget {
   const PromoBanner({super.key});
@@ -629,8 +661,6 @@ class PromoBanner extends StatelessWidget {
   }
 }
 
-// ── ProductCard ───────────────────────────────────────────────────────────────
-
 class ProductCard extends StatelessWidget {
   final Map<String, dynamic> product;
   final double? distance;
@@ -644,6 +674,7 @@ class ProductCard extends StatelessWidget {
     final productName = product['productName'] as String? ?? 'No Name';
     final price = (product['price'] as num?)?.toDouble() ?? 0.0;
     final sellerId = product['seller_id'] as String? ?? '';
+    final isVerified = product['profiles']?['is_verified'] ?? false;
 
     final NumberFormat currencyFormat =
     NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 2);
@@ -693,6 +724,19 @@ class ProductCard extends StatelessWidget {
                                 color: Colors.white,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  if (isVerified)
+                    Positioned(
+                      bottom: 5,
+                      left: 5,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.verified, color: Colors.green, size: 16),
                       ),
                     ),
                   Positioned(
