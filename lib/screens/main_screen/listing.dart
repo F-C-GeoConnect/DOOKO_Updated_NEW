@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 import 'orders_history_screen.dart';
 import '../../widgets/supabase_image.dart';
 import '../../services/product_service.dart';
@@ -13,24 +14,38 @@ class ListingPage extends StatefulWidget {
 
 class _ListingPageState extends State<ListingPage> {
   final _supabase = Supabase.instance.client;
-  late Stream<List<Map<String, dynamic>>> _productsStream;
+  
+  // OPTIMIZED: Switch from Stream to 15s polling to drastically reduce egress
+  Future<List<Map<String, dynamic>>>? _productsFuture;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
-    _productsStream = _initProductsStream();
+    _refreshProducts();
+    // Polling every 15 seconds as recommended for best balance of UX and egress
+    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refreshProducts());
   }
 
-  // UPDATED: Using Stream for dynamic/real-time updates
-  Stream<List<Map<String, dynamic>>> _initProductsStream() {
-    final currentUser = _supabase.auth.currentUser;
-    if (currentUser == null) return const Stream.empty();
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
 
-    return _supabase
-        .from('products')
-        .stream(primaryKey: ['id'])
-        .eq('seller_id', currentUser.id)
-        .order('created_at', ascending: false);
+  void _refreshProducts() {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) return;
+
+    // OPTIMIZED: Selecting only essential columns and limiting results to 100
+    setState(() {
+      _productsFuture = _supabase
+          .from('products')
+          .select('id, productName, price, imageUrl, total_quantity, created_at')
+          .eq('seller_id', currentUser.id)
+          .order('created_at', ascending: false)
+          .limit(100);
+    });
   }
 
   Future<void> _updateQuantity(int productId, int currentQuantity, int change) async {
@@ -41,7 +56,7 @@ class _ListingPageState extends State<ListingPage> {
             .from('products')
             .update({'total_quantity': newQuantity})
             .eq('id', productId);
-        // No manual refresh needed as Stream will handle it
+        _refreshProducts();
       } catch (e) {
         debugPrint('Error updating quantity: $e');
       }
@@ -61,7 +76,7 @@ class _ListingPageState extends State<ListingPage> {
           .delete()
           .eq('id', productId)
           .eq('seller_id', userId)
-          .select();
+          .select('id');
 
       if (response.isEmpty) {
         throw 'No permission to delete this product.';
@@ -75,6 +90,8 @@ class _ListingPageState extends State<ListingPage> {
           debugPrint('Storage deletion error: $storageError');
         }
       }
+
+      _refreshProducts();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -143,10 +160,10 @@ class _ListingPageState extends State<ListingPage> {
   }
 
   Widget _buildListingsTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _productsStream,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _productsFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
@@ -174,8 +191,6 @@ class _ListingPageState extends State<ListingPage> {
           itemBuilder: (context, index) {
             final product = products[index];
             final quantity = (product['total_quantity'] ?? 0) as num;
-            
-            // Clean up image path using ProductService helper
             final imagePath = ProductService.getStoragePath(product['imageUrl']);
 
             return Card(

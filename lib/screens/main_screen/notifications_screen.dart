@@ -94,9 +94,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _fetchNotifications(String userId) async {
     try {
+      // OPTIMIZED: Select only necessary columns to reduce egress
       final data = await _supabase
           .from('notifications')
-          .select()
+          .select('id, is_read, type, title, message, created_at, related_id')
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 

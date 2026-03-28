@@ -1,10 +1,16 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
 class NotificationService {
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
   final _fcm = FirebaseMessaging.instance;
   final _supabase = Supabase.instance.client;
+  final _localNotifications = FlutterLocalNotificationsPlugin();
 
   Future<void> initNotifications() async {
     // 1. Request Permission
@@ -17,10 +23,49 @@ class NotificationService {
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       debugPrint('User granted notification permission');
       
-      // 2. Get Token and save it
+      // 2. Initialize Local Notifications for Foreground
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const initSettings = InitializationSettings(android: androidSettings);
+      await _localNotifications.initialize(initSettings);
+
+      // 3. Create Android Notification Channel
+      const androidChannel = AndroidNotificationChannel(
+        'high_importance_channel',
+        'High Importance Notifications',
+        description: 'This channel is used for important notifications.',
+        importance: Importance.max,
+      );
+
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(androidChannel);
+
+      // 4. Handle Foreground Messages
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        RemoteNotification? notification = message.notification;
+        AndroidNotification? android = message.notification?.android;
+
+        if (notification != null && android != null) {
+          _localNotifications.show(
+            notification.hashCode,
+            notification.title,
+            notification.body,
+            NotificationDetails(
+              android: AndroidNotificationDetails(
+                androidChannel.id,
+                androidChannel.name,
+                channelDescription: androidChannel.description,
+                icon: android.smallIcon,
+              ),
+            ),
+          );
+        }
+      });
+
+      // 5. Get Token and save it
       await _updateToken();
 
-      // 3. Listen for token refresh
+      // 6. Listen for token refresh
       _fcm.onTokenRefresh.listen((newToken) {
         _saveTokenToDatabase(newToken);
       });

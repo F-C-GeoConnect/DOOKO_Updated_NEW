@@ -17,13 +17,15 @@ class ChatService {
   }
 
   Future<List<ConversationSummary>> fetchConversations(String uid) async {
-    // FIXED: Only select necessary columns to reduce egress
+    // 1. Fetch recent messages - OPTIMIZED: Added limit to reduce egress
+    // In a production app, this should ideally be handled by a dedicated conversations table
+    // or a specialized RPC/view to avoid fetching all messages.
     final data = await _supabase
         .from('messages')
         .select('conversation_id, sender_id, receiver_id, content, image_url, is_read, created_at')
         .or('sender_id.eq.$uid,receiver_id.eq.$uid')
         .order('created_at', ascending: false)
-        .order('id', ascending: false);
+        .limit(200); // Only fetch the most recent 200 messages for conversation list
 
     final messages = List<Map<String, dynamic>>.from(data);
 
@@ -42,6 +44,7 @@ class ChatService {
           : m['sender_id'] as String;
     }).toSet();
 
+    // 2. Fetch profiles with latest avatar_url
     Map<String, Map<String, dynamic>> profiles = {};
     if (otherIds.isNotEmpty) {
       try {
@@ -73,6 +76,7 @@ class ChatService {
           ? m['receiver_id'] as String
           : m['sender_id'] as String;
       final profile = profiles[otherId];
+      
       return ConversationSummary(
         conversationId: cid,
         otherUserId: otherId,
@@ -85,24 +89,17 @@ class ChatService {
       );
     }).toList();
 
-    summaries.sort((a, b) {
-      if (a.lastMessageTime.isEmpty && b.lastMessageTime.isEmpty) return 0;
-      if (a.lastMessageTime.isEmpty) return 1;
-      if (b.lastMessageTime.isEmpty) return -1;
-      return b.lastMessageTime.compareTo(a.lastMessageTime);
-    });
+    summaries.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
     return summaries;
   }
 
   Future<List<Map<String, dynamic>>> fetchMessages(String conversationId) async {
-    // FIXED: Specify columns for message history
     final data = await _supabase
         .from('messages')
         .select('id, conversation_id, sender_id, receiver_id, content, image_url, is_read, created_at')
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: false)
-        .order('id', ascending: false)
-        .limit(100); // Reduced from 200 to 100 for better initial load egress
+        .limit(100);
     
     final list = List<Map<String, dynamic>>.from(data);
     return list.reversed.toList();
@@ -122,7 +119,7 @@ class ChatService {
       'receiver_id': receiverId,
       'content': content,
     })
-        .select('id, conversation_id, sender_id, receiver_id, content, image_url, is_read, created_at')
+        .select('id, conversation_id, sender_id, receiver_id, content, created_at') // OPTIMIZED: Select only needed columns
         .single();
     return inserted;
   }
@@ -149,7 +146,7 @@ class ChatService {
       'content': null,
       'image_url': imageUrl,
     })
-        .select('id, conversation_id, sender_id, receiver_id, content, image_url, is_read, created_at')
+        .select('id, conversation_id, sender_id, receiver_id, image_url, created_at') // OPTIMIZED: Select only needed columns
         .single();
     return inserted;
   }

@@ -30,11 +30,13 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
     if (userId == null) return [];
 
     try {
+      // OPTIMIZED: Selecting specific columns instead of '*' to reduce egress
       final data = await _supabase
           .from('orders')
-          .select('*, items')
+          .select('id, buyer_id, seller_id, status, total_amount, created_at, items')
           .or('buyer_id.eq.$userId,seller_id.eq.$userId')
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .limit(50); // Added limit
 
       return List<Map<String, dynamic>>.from(data);
     } catch (e) {
@@ -48,20 +50,17 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
     final items = order['items'] as List<dynamic>? ?? [];
 
     try {
-      // 1. Update order status to 'accepted'
       await _supabase
           .from('orders')
           .update({'status': 'accepted'})
           .eq('id', orderId);
 
-      // 2. Decrease stock for each product in the order
       for (var item in items) {
         final productId = item['product_id'];
         final orderedQty = num.tryParse(item['quantity'].toString()) ?? 0;
 
         if (productId == null) continue;
 
-        // Fetch current stock from 'products' table
         final productResponse = await _supabase
             .from('products')
             .select('total_quantity')
@@ -73,10 +72,8 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
           final newStock = currentStock - orderedQty;
 
           if (newStock <= 0) {
-            // If stock hits 0 or below, delete from listing
             await _supabase.from('products').delete().eq('id', productId);
           } else {
-            // Otherwise update the quantity
             await _supabase
                 .from('products')
                 .update({'total_quantity': newStock})
@@ -146,7 +143,7 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
         child: FutureBuilder<List<Map<String, dynamic>>>(
           future: _ordersFuture,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
               return Center(child: CircularProgressIndicator(color: colorScheme.primary));
             }
 

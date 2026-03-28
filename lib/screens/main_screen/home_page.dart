@@ -288,11 +288,11 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _fetchNotifications(String userId) async {
     try {
+      // OPTIMIZED: Selecting only is_read to reduce egress on the home page notification badge
       final data = await Supabase.instance.client
           .from('notifications')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
+          .select('is_read')
+          .eq('user_id', userId);
       if (mounted)
         setState(() => _notifications = List<Map<String, dynamic>>.from(data));
     } catch (e) {

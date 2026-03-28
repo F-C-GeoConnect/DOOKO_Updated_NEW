@@ -189,7 +189,12 @@ class _CartScreenState extends State<CartScreen> {
 
   void _navigateToProduct(int productId) async {
     try {
-      final data = await Supabase.instance.client.from('products').select().eq('id', productId).single();
+      // OPTIMIZED: Select only needed columns
+      final data = await Supabase.instance.client
+          .from('products')
+          .select('id, productName, price, imageUrl, seller_id, location, latitude, longitude, category, description, total_quantity, sellerName, created_at')
+          .eq('id', productId)
+          .single();
       if (mounted) {
         Navigator.push(context, MaterialPageRoute(builder: (context) => ProductProfilePage(product: data)));
       }

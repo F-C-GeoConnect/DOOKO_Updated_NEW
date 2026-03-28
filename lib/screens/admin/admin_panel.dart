@@ -1,5 +1,5 @@
 // lib/screens/main_screen/admin_panel.dart
-// Complete Admin Control Panel - Replace the existing admin_panel.dart with this file
+// Complete Admin Control Panel - Optimized for egress
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -89,6 +89,7 @@ class _AdminPanelState extends State<AdminPanel>
       ]);
 
       // Revenue: sum of completed orders
+      // OPTIMIZED: Select only total_amount
       final revenueData = await _supabase
           .from('orders')
           .select('total_amount')
@@ -120,29 +121,38 @@ class _AdminPanelState extends State<AdminPanel>
   }
 
   Future<List<Map<String, dynamic>>> _fetchUsers() async {
-    final data =
-    await _supabase.from('profiles').select().order('full_name');
+    // OPTIMIZED: Select only needed columns and added limit
+    final data = await _supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, phone, address, is_admin, is_banned, is_verified')
+        .order('full_name')
+        .limit(100); 
     return List<Map<String, dynamic>>.from(data);
   }
 
   Future<List<Map<String, dynamic>>> _fetchProducts() async {
+    // OPTIMIZED: Select only needed columns and added limit
     final data = await _supabase
         .from('products')
-        .select()
-        .order('created_at', ascending: false);
+        .select('id, productName, price, imageUrl, sellerName, category, total_quantity, created_at, description')
+        .order('created_at', ascending: false)
+        .limit(100);
     return List<Map<String, dynamic>>.from(data);
   }
 
   Future<List<Map<String, dynamic>>> _fetchOrders() async {
+    // OPTIMIZED: Select specific columns instead of '*'
     var query = _supabase
         .from('orders')
-        .select('*, items')
-        .order('created_at', ascending: false);
+        .select('id, status, total_amount, created_at, payment_method, delivery_address, items')
+        .order('created_at', ascending: false)
+        .limit(100);
     final data = await query;
     return List<Map<String, dynamic>>.from(data);
   }
 
   Future<List<Map<String, dynamic>>> _fetchRecentActivity() async {
+    // OPTIMIZED: Already selecting specific columns
     final orders = await _supabase
         .from('orders')
         .select('id, status, total_amount, created_at, items')
@@ -1626,7 +1636,7 @@ class _AdminPanelState extends State<AdminPanel>
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _supabase
           .from('notifications')
-          .select()
+          .select('id, title, message, created_at')
           .order('created_at', ascending: false)
           .limit(10),
       builder: (context, snapshot) {

@@ -75,9 +75,10 @@ class _FarmerProfilePageState extends State<FarmerProfilePage> {
 
   Future<void> _fetchFarmerProfile() async {
     try {
+      // OPTIMIZED: Select only needed columns
       final data = await _supabase
           .from('profiles')
-          .select()
+          .select('full_name, avatar_url')
           .eq('id', widget.farmerId)
           .single();
       if (mounted) setState(() => _farmerProfile = data);
@@ -88,9 +89,10 @@ class _FarmerProfilePageState extends State<FarmerProfilePage> {
 
   Future<void> _fetchFarmerProducts() async {
     try {
+      // OPTIMIZED: Select only needed columns
       final data = await _supabase
           .from('products')
-          .select()
+          .select('productName, price, imageUrl')
           .eq('sellerID', widget.farmerId)
           .order('created_at', ascending: false);
 

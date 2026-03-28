@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/user_avatar.dart';
 import '../login_screen.dart';
 import 'orders_history_screen.dart';
 import '../admin/admin_panel.dart';
@@ -80,6 +81,8 @@ class _MyAccountState extends State<MyAccount> {
       final imageUrl = _supabase.storage.from('avatars').getPublicUrl(filePath);
 
       await _supabase.from('profiles').update({'avatar_url': imageUrl}).eq('id', user.id);
+      
+      // Update local metadata as well
       await _supabase.auth.updateUser(UserAttributes(data: {'avatar_url': imageUrl}));
 
       if (mounted) {
@@ -186,15 +189,10 @@ class _MyAccountState extends State<MyAccount> {
                       children: [
                         Stack(
                           children: [
-                            CircleAvatar(
+                            UserAvatar(
+                              avatarUrl: profile['avatar_url'],
+                              name: profile['full_name'] ?? 'User',
                               radius: 55,
-                              backgroundColor: Colors.green.shade50,
-                              backgroundImage: (profile['avatar_url'] != null && profile['avatar_url'].toString().isNotEmpty)
-                                  ? CachedNetworkImageProvider(profile['avatar_url'])
-                                  : null,
-                              child: (profile['avatar_url'] == null || profile['avatar_url'].toString().isEmpty)
-                                ? Text((profile['full_name'] ?? 'U')[0].toUpperCase(), style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.green.shade800))
-                                : null,
                             ),
                             if (_isUploading)
                               const Positioned.fill(child: CircularProgressIndicator(color: Colors.green)),
@@ -366,7 +364,7 @@ class _MyAccountState extends State<MyAccount> {
         onPressed: onTap,
         icon: Icon(icon, color: color, size: 20),
         label: Text(text, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
-        style: OutlinedButton.styleFrom(side: BorderSide(color: color.withValues(alpha: 0.5)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        style: OutlinedButton.styleFrom(side: BorderSide(color: color.withOpacity(0.5)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
       ),
     );
   }
