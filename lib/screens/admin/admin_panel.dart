@@ -1,5 +1,4 @@
-// lib/screens/main_screen/admin_panel.dart
-// Complete Admin Control Panel - Optimized for egress
+
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';

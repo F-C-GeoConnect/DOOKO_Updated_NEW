@@ -1,20 +1,5 @@
 // lib/screens/farmer_profile_page.dart
-//
-// CHANGES FROM ORIGINAL:
-//  • Star rating is now inline (always visible) — no extra tap to open a dialog.
-//    The dialog is removed entirely; selecting stars directly in the rating row
-//    is more intuitive and standard.
-//  • RatingSummary now wired up with activeStarFilter + onStarFilter so users
-//    can tap a bar to filter the visible review list.
-//  • Delete confirmation dialog added — previously a single tap deleted a review
-//    with no warning (very easy to trigger by accident).
-//  • Comment validation: empty comment is allowed (rating-only review), but if
-//    the text field is non-empty it must be at least 5 characters.
-//  • _buildRatingSection replaced with _buildInlineRatingInput (inline stars).
-//  • Filtered reviews list shown when a star filter is active.
-//  • Minor: _buildProductItem trailing icon was "delete" (red) for someone else's
-//    products — changed to chevron_right (read-only).
-//  • All existing imports, Supabase calls, and widget structure preserved.
+
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';

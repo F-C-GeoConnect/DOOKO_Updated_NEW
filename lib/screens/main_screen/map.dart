@@ -135,6 +135,73 @@ class _ProductMapState extends State<ProductMap> {
     }
   }
 
+  void _openProductSheet(BuildContext context, Map<String, dynamic> product,
+      String imagePath, String name, String distanceString) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return _ProductBottomSheet(
+          product: product,
+          imagePath: imagePath,
+          name: name,
+          distanceString: distanceString,
+          onTap: () async {
+            // 1. Close the sheet
+            Navigator.pop(sheetContext);
+
+            // 2. Show a loading overlay
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => const Center(
+                child: CircularProgressIndicator(color: Colors.green),
+              ),
+            );
+
+            // 3. Robust parsing of product ID
+            final dynamic rawId = product['id'];
+            int? productId;
+            if (rawId is num) {
+              productId = rawId.toInt();
+            } else if (rawId != null) {
+              productId = int.tryParse(rawId.toString()) ?? 
+                          num.tryParse(rawId.toString())?.toInt();
+            }
+            
+            Map<String, dynamic>? fullProduct;
+            if (productId != null) {
+              try {
+                // Fetch full product details including total_quantity
+                fullProduct = await Supabase.instance.client
+                    .from('products')
+                    .select('*, profiles:seller_id(is_verified)')
+                    .eq('id', productId)
+                    .maybeSingle();
+              } catch (e) {
+                debugPrint('Error fetching full product: $e');
+              }
+            }
+
+            // 4. Dismiss loading overlay
+            if (context.mounted) Navigator.pop(context);
+
+            if (!context.mounted) return;
+
+            // 5. Navigate with the FULL data (including total_quantity)
+            // If fullProduct fetch failed, we fallback to 'product' data
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProductProfilePage(product: fullProduct ?? product),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Marker _createProductMarker(BuildContext context, Map<String, dynamic> product) {
     final latitude = product['latitude'] as double? ?? 0.0;
     final longitude = product['longitude'] as double? ?? 0.0;
@@ -161,46 +228,13 @@ class _ProductMapState extends State<ProductMap> {
       height: 70,
       point: LatLng(latitude, longitude),
       child: GestureDetector(
-        onTap: () {
-          showModalBottomSheet(
-            context: context,
-            backgroundColor: Colors.transparent,
-            builder: (context) {
-              return Card(
-                margin: const EdgeInsets.all(16.0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
-                  child: ListTile(
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: imagePath.isNotEmpty
-                          ? SupabaseImage(imagePath: imagePath, width: 56, height: 56)
-                          : Container(width: 56, height: 56, color: Colors.grey[200], child: const Icon(Icons.image)),
-                    ),
-                    title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Rs. ${product['price'] ?? 0}'),
-                        Text(distanceString, style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => ProductProfilePage(product: product)),
-                      );
-                    },
-                  ),
-                ),
-              );
-            },
-          );
-        },
+        onTap: () => _openProductSheet(
+          context,
+          product,
+          imagePath,
+          name,
+          distanceString,
+        ),
         child: Stack(
           alignment: Alignment.topCenter,
           children: [
@@ -215,7 +249,10 @@ class _ProductMapState extends State<ProductMap> {
                 shape: BoxShape.circle,
                 color: Colors.white,
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2)),
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2)),
                 ],
                 border: Border.all(color: Colors.green, width: 2),
               ),
@@ -239,7 +276,9 @@ class _ProductMapState extends State<ProductMap> {
           future: _productsFuture,
           builder: (context, snapshot) {
             final allProducts = snapshot.data ?? [];
-            final productMarkers = allProducts.map((product) => _createProductMarker(context, product)).toList();
+            final productMarkers = allProducts
+                .map((product) => _createProductMarker(context, product))
+                .toList();
 
             return FlutterMap(
               mapController: _mapController,
@@ -257,7 +296,8 @@ class _ProductMapState extends State<ProductMap> {
                   markers: [
                     Marker(
                       point: widget.userLocation,
-                      child: const Icon(Icons.person_pin_circle, color: Colors.blue, size: 44),
+                      child: const Icon(
+                          Icons.person_pin_circle, color: Colors.blue, size: 44),
                     )
                   ],
                 )
@@ -279,6 +319,120 @@ class _ProductMapState extends State<ProductMap> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ProductBottomSheet extends StatelessWidget {
+  final Map<String, dynamic> product;
+  final String imagePath;
+  final String name;
+  final String distanceString;
+  final VoidCallback onTap;
+
+  const _ProductBottomSheet({
+    required this.product,
+    required this.imagePath,
+    required this.name,
+    required this.distanceString,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.all(16.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: ListTile(
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: imagePath.isNotEmpty
+                  ? SupabaseImage(imagePath: imagePath, width: 56, height: 56)
+                  : Container(
+                width: 56,
+                height: 56,
+                color: Colors.grey[200],
+                child: const Icon(Icons.image),
+              ),
+            ),
+            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Rs. ${product['price'] ?? 0}'),
+                Text(
+                  distanceString,
+                  style: TextStyle(
+                      color: Colors.green.shade700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            trailing: Wrap(
+              spacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _StockDisplay(productId: product['id']),
+                const Icon(Icons.chevron_right, color: Colors.grey),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StockDisplay extends StatelessWidget {
+  final dynamic productId;
+  const _StockDisplay({required this.productId});
+
+  @override
+  Widget build(BuildContext context) {
+    // Ensure we have an integer ID for the query
+    final int? id = productId is num ? productId.toInt() : int.tryParse(productId?.toString() ?? '');
+
+    if (id == null) return const SizedBox.shrink();
+
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: Supabase.instance.client
+          .from('products')
+          .select('total_quantity')
+          .eq('id', id)
+          .maybeSingle(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+          );
+        }
+        final qty = snapshot.data?['total_quantity'] ?? 0;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: qty > 0 ? Colors.green.shade50 : Colors.red.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: qty > 0 ? Colors.green.shade100 : Colors.red.shade100),
+          ),
+          child: Text(
+            '$qty left',
+            style: TextStyle(
+              color: qty > 0 ? Colors.green.shade700 : Colors.red.shade700,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -1,17 +1,3 @@
-//
-// CHANGES FROM ORIGINAL:
-//  • _ReviewSheet: star rating defaults to 0 (no rating), not 5.
-//    Defaulting to 5 silently pre-fills a top rating if the user taps
-//    Submit without touching the stars — this is a significant bias.
-//  • Validation added: user must select ≥ 1 star per product AND for the
-//    farmer before submitting. Previously any all-zero submission would
-//    write a "5-star" (default) review to the DB.
-//  • "Rate Products & Farmer" button is replaced with "Leave a Review"
-//    after it has already been submitted, showing a tick badge instead
-//    (prevents double-submissions, which upsert handles but the UX hid).
-//  • _ReviewSheet now shows per-item image thumbnails for clarity.
-//  • Error handling improved: specific error message shown in SnackBar.
-//  • All other Order Detail UI is left exactly as-is.
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';

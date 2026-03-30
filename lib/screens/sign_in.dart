@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/validators.dart';
 
 import 'login_screen.dart';
 import 'otp_verification_screen.dart';
@@ -138,7 +139,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   TextFormField(
                     controller: _fullNameController,
                     decoration: InputDecoration(
-                      hintText: 'Enter your full name',
+                      hintText: 'e.g. John_Doe',
                       filled: true,
                       fillColor: Colors.grey[50],
                       border: OutlineInputBorder(
@@ -148,12 +149,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         vertical: 16,
                       ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your full name';
-                      }
-                      return null;
-                    },
+                    validator: Validators.validateFullName,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9._]')),
+                    ],
                   ),
                   const SizedBox(height: 24),
                   Text(
